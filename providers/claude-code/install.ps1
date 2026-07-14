@@ -40,25 +40,43 @@ if ($claudeCmd) {
     Write-Host "[skip] claude CLI not on PATH, cannot manage ponytail plugin" -ForegroundColor Yellow
 }
 
-# ponytail default mode = ultra
-$ponytailConfigDir = Join-Path $HOME ".config\ponytail"
-$ponytailConfigPath = Join-Path $ponytailConfigDir "config.json"
-New-Item -ItemType Directory -Force -Path $ponytailConfigDir | Out-Null
-if (-not (Test-Path $ponytailConfigPath)) {
-    '{"defaultMode":"ultra"}' | Set-Content $ponytailConfigPath -Encoding utf8
-    Write-Host "[add] ponytail config: defaultMode = ultra"
-} else {
-    $ponytailCfg = Get-Content $ponytailConfigPath -Raw | ConvertFrom-Json
-    if (-not (Test-HasProp $ponytailCfg 'defaultMode')) {
-        $ponytailCfg | Add-Member -NotePropertyName 'defaultMode' -NotePropertyValue 'ultra'
-        $ponytailCfg | ConvertTo-Json -Depth 10 | Set-Content $ponytailConfigPath -Encoding utf8
-        Write-Host "[add] ponytail config: defaultMode = ultra"
-    } elseif ($ponytailCfg.defaultMode -ne 'ultra') {
-        Write-Host "[warn] ponytail config already has defaultMode='$($ponytailCfg.defaultMode)' - left untouched." -ForegroundColor Yellow
+# Set a tool's default intensity mode via both its User env var (highest
+# priority, immune to config-path mistakes) and its config.json (fallback),
+# at the tool's real per-OS config path - on Windows that's %APPDATA%\<tool>,
+# NOT ~/.config/<tool> (that's the Mac/Linux fallback only).
+function Set-ToolUltraMode($toolName, $envVarName) {
+    $existingEnv = [Environment]::GetEnvironmentVariable($envVarName, "User")
+    if ($existingEnv -eq 'ultra') {
+        Write-Host "[ok] $envVarName already set to ultra"
+    } elseif ($existingEnv) {
+        Write-Host "[warn] $envVarName already set to '$existingEnv' - left untouched." -ForegroundColor Yellow
     } else {
-        Write-Host "[ok] ponytail config: defaultMode already ultra"
+        [Environment]::SetEnvironmentVariable($envVarName, "ultra", "User")
+        Write-Host "[add] $envVarName = ultra (user env var)"
+    }
+
+    $configDir = Join-Path $env:APPDATA $toolName
+    $configPath = Join-Path $configDir "config.json"
+    New-Item -ItemType Directory -Force -Path $configDir | Out-Null
+    if (-not (Test-Path $configPath)) {
+        '{"defaultMode":"ultra"}' | Set-Content $configPath -Encoding utf8
+        Write-Host "[add] $toolName config.json: defaultMode = ultra"
+    } else {
+        $cfg = Get-Content $configPath -Raw | ConvertFrom-Json
+        if (-not (Test-HasProp $cfg 'defaultMode')) {
+            $cfg | Add-Member -NotePropertyName 'defaultMode' -NotePropertyValue 'ultra'
+            $cfg | ConvertTo-Json -Depth 10 | Set-Content $configPath -Encoding utf8
+            Write-Host "[add] $toolName config.json: defaultMode = ultra"
+        } elseif ($cfg.defaultMode -ne 'ultra') {
+            Write-Host "[warn] $toolName config.json already has defaultMode='$($cfg.defaultMode)' - left untouched." -ForegroundColor Yellow
+        } else {
+            Write-Host "[ok] $toolName config.json: defaultMode already ultra"
+        }
     }
 }
+
+Set-ToolUltraMode -toolName "ponytail" -envVarName "PONYTAIL_DEFAULT_MODE"
+Set-ToolUltraMode -toolName "caveman" -envVarName "CAVEMAN_DEFAULT_MODE"
 
 # 1. RTK check (never auto-install silently - corporate machines vary)
 $rtk = Get-Command rtk -ErrorAction SilentlyContinue
