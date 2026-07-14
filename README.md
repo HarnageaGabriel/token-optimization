@@ -5,6 +5,7 @@ One command to bootstrap AI coding agent config on a new machine or repo.
 ```powershell
 .\init.ps1                    # defaults to claude-code
 .\init.ps1 -Provider claude-code
+.\init.ps1 -Provider copilot
 ```
 
 Idempotent: safe to re-run. Never overwrites a file or settings key that already
@@ -26,7 +27,22 @@ exists with a different value — it reports what it skipped and why instead.
 Generic on purpose — no project- or company-specific rules baked in. Add those
 to your own project's `CLAUDE.md`, not here.
 
-## Adding another provider (e.g. Copilot)
+## What `copilot` sets up
+
+Scope is smaller on purpose: Copilot Chat's instructions file
+(`.github/copilot-instructions.md`) is per-repo, not global like `~/.claude`,
+so this provider doesn't write into any project on your behalf.
+
+- Checks the GitHub Copilot Chat extension is installed (reports, never
+  auto-downloads on a corporate machine; sign-in can't be automated either)
+- Sets the global VS Code setting
+  `github.copilot.chat.codeGeneration.useInstructionFiles: true`, so Copilot
+  picks up a repo's instructions file when present
+- Ships `providers/copilot/copilot-instructions.md` as a template — copy it
+  to `<project>\.github\copilot-instructions.md` in whichever repos you want
+  it active
+
+## Adding another provider
 
 Create `providers/<name>/install.ps1` following the same shape as
 `providers/claude-code/install.ps1`: check what's already there before writing,

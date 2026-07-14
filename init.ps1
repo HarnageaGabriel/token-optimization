@@ -4,7 +4,7 @@ Usage: .\init.ps1 [-Provider claude-code]
 #>
 
 param(
-    [ValidateSet("claude-code")]
+    [ValidateSet("claude-code", "copilot")]
     [string]$Provider = "claude-code"
 )
 
