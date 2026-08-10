@@ -105,6 +105,23 @@ Get-ChildItem $agentsSrc -Filter *.md | ForEach-Object {
     }
 }
 
+# 2b. Statusline script - shows caveman/ponytail level and live context usage.
+# Runs outside the model, so it costs zero tokens; it's the only way to see
+# context filling up without spending context to ask.
+$hooksDst = Join-Path $ClaudeDir "hooks"
+New-Item -ItemType Directory -Force -Path $hooksDst | Out-Null
+$statuslineSrc = Join-Path $here "statusline.ps1"
+$statuslineDst = Join-Path $hooksDst "statusline.ps1"
+if (-not (Test-Path $statuslineDst)) {
+    Copy-Item $statuslineSrc $statuslineDst
+    Write-Host "[add] hooks/statusline.ps1"
+} elseif ((Get-Content $statuslineDst -Raw) -eq (Get-Content $statuslineSrc -Raw)) {
+    Write-Host "[ok] hooks/statusline.ps1 already up to date"
+} else {
+    Copy-Item $statuslineSrc $statuslineDst -Force
+    Write-Host "[add] hooks/statusline.ps1 updated to template version"
+}
+
 # 3. settings.json - merge, don't overwrite unrelated keys
 $settingsPath = Join-Path $ClaudeDir "settings.json"
 $patch = Get-Content (Join-Path $here "settings.patch.json") -Raw | ConvertFrom-Json
@@ -132,6 +149,20 @@ if (-not (Test-HasProp $settings.permissions 'defaultMode')) {
     Write-Host "[add] settings.json: permissions.defaultMode = auto"
 } elseif ($settings.permissions.defaultMode -ne $patch.permissions.defaultMode) {
     Write-Host "[warn] settings.json already has permissions.defaultMode='$($settings.permissions.defaultMode)' - left untouched." -ForegroundColor Yellow
+}
+
+# statusLine -> the script installed above
+$statuslineCmd = "powershell -ExecutionPolicy Bypass -File `"$statuslineDst`""
+if (-not (Test-HasProp $settings 'statusLine')) {
+    $settings | Add-Member -NotePropertyName 'statusLine' -NotePropertyValue ([PSCustomObject]@{
+        type    = 'command'
+        command = $statuslineCmd
+    })
+    Write-Host "[add] settings.json: statusLine wired"
+} elseif ($settings.statusLine.command -ne $statuslineCmd) {
+    Write-Host "[warn] settings.json already has a different statusLine - left untouched." -ForegroundColor Yellow
+} else {
+    Write-Host "[ok] settings.json: statusLine already wired"
 }
 
 # hooks.PreToolUse Bash -> rtk hook claude (only if rtk present, dedup)
