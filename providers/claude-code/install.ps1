@@ -44,7 +44,15 @@ if ($claudeCmd) {
 # priority, immune to config-path mistakes) and its config.json (fallback),
 # at the tool's real per-OS config path - on Windows that's %APPDATA%\<tool>,
 # NOT ~/.config/<tool> (that's the Mac/Linux fallback only).
-function Set-ToolUltraMode($toolName, $envVarName) {
+function Set-ToolUltraMode {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)][string]$toolName,
+        [Parameter(Mandatory)][string]$envVarName
+    )
+
+    if (-not $PSCmdlet.ShouldProcess("$toolName", "set default intensity mode to ultra")) { return }
+
     $existingEnv = [Environment]::GetEnvironmentVariable($envVarName, "User")
     if ($existingEnv -eq 'ultra') {
         Write-Host "[ok] $envVarName already set to ultra"
