@@ -1,0 +1,23 @@
+name: Feature request
+description: Propose something this repository should also cover
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you unable to do today, and in what real situation did it come up?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What should exist. Concrete beats abstract.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What you tried or rejected, and why it did not fit.
