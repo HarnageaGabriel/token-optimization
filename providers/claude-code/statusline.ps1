@@ -46,7 +46,10 @@ try {
                 if ($u) {
                     $ctx = [int]$u.input_tokens + [int]$u.cache_read_input_tokens + [int]$u.cache_creation_input_tokens
                 }
-            } catch { }
+            } catch {
+                # A malformed transcript line is expected; keep scanning older lines.
+                Write-Debug "skipped unparsable transcript line: $_"
+            }
         }
 
         if ($ctx -gt 0) {
@@ -62,6 +65,9 @@ try {
             }
         }
     }
-} catch { }
+} catch {
+    # The statusline must never fail the host shell: degrade to no output.
+    Write-Debug "statusline suppressed error: $_"
+}
 
 if ($parts.Count) { Write-Output ($parts -join "  |  ") }

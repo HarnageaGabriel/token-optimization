@@ -29,7 +29,7 @@ jobs:
       - name: Analyze PowerShell scripts
         shell: pwsh
         run: |
-          $results = Invoke-ScriptAnalyzer -Path . -Recurse -Severity Warning, Error
+          $results = Invoke-ScriptAnalyzer -Path . -Recurse -Severity Warning, Error -Settings ./PSScriptAnalyzerSettings.psd1
           if ($results) {
             $results | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
             Write-Host "::error::PSScriptAnalyzer reported $($results.Count) finding(s)"
