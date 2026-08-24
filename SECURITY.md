@@ -2,29 +2,30 @@
 
 ## Supported versions
 
-This project is maintained on the `main` branch. Fixes land there; there are no
-long-lived release branches to back-port to.
+Everything is maintained on `main`. There are no release branches, so fixes go
+there and nowhere else.
 
 ## Reporting a vulnerability
 
-Do not open a public issue for a security problem.
+Please don't open a public issue for a security problem.
 
-Use GitHub's private reporting instead: **Security → Report a vulnerability** on
-this repository. If private reporting is unavailable to you, email
+Use GitHub private reporting instead: **Security > Report a vulnerability** on
+this repository. If that isn't available to you, write to
 `gabriel.harnagea06@gmail.com` with `SECURITY` in the subject.
 
-Please include:
+Useful things to include:
 
-- what the issue is and where it lives (file, line, or command)
-- how to reproduce it, ideally with a minimal example
-- what an attacker gains, and any preconditions they need
+- what the issue is and where it lives, ideally down to the file or the command
+- how to reproduce it, with a minimal example if you have one
+- what an attacker gets out of it, and what they need in place first
 
-You can expect an acknowledgement within 7 days and a status update within 30.
-Please give me a reasonable window to ship a fix before disclosing publicly.
+I'll try to acknowledge within 7 days and give you a status update within 30.
+This is a personal project maintained by one person, so please leave some room
+for a fix before going public.
 
 ## Scope
 
-Configuration and workflow examples in this repository are meant to be read and
-adapted, not run blindly against production. Reports about hardcoded credentials,
-privilege escalation through a workflow, or an example that is unsafe by default
-are in scope and welcome.
+The configuration and workflow examples here are written to be read and adapted.
+Running them as-is against a production system isn't the intended use. Reports
+about hardcoded credentials, privilege escalation through a workflow, or an
+example that is unsafe by default are all welcome.

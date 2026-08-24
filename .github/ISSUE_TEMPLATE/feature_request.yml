@@ -6,18 +6,18 @@ body:
     id: problem
     attributes:
       label: The problem
-      description: What are you unable to do today, and in what real situation did it come up?
+      description: What can't you do today, and in what situation did it come up?
     validations:
       required: true
   - type: textarea
     id: proposal
     attributes:
       label: Proposed change
-      description: What should exist. Concrete beats abstract.
+      description: What should exist, described as concretely as you can.
     validations:
       required: true
   - type: textarea
     id: alternatives
     attributes:
       label: Alternatives considered
-      description: What you tried or rejected, and why it did not fit.
+      description: What you tried or ruled out, and why it didn't fit.
