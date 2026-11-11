@@ -16,6 +16,36 @@ function Test-HasProp($obj, $name) {
     return $null -ne $obj -and ($obj.PSObject.Properties.Name -contains $name)
 }
 
+# Return the first python.exe that can actually 'import graphify.serve', or $null.
+# 'uv tool install' puts the package in an isolated venv that the python on PATH
+# cannot see, so probing candidates beats assuming a single layout.
+function Get-GraphifyPython {
+    $candidates = @()
+
+    if (Get-Command uv -ErrorAction SilentlyContinue) {
+        $toolDir = uv tool dir 2>$null | Select-Object -First 1
+        if ($toolDir) { $candidates += (Join-Path $toolDir "graphifyy\Scripts\python.exe") }
+    }
+
+    $g = Get-Command graphify -ErrorAction SilentlyContinue
+    if ($g) {
+        $scriptsDir = Split-Path -Parent $g.Source
+        $candidates += (Join-Path $scriptsDir "python.exe")
+        $candidates += (Join-Path (Split-Path -Parent $scriptsDir) "python.exe")
+    }
+
+    $sysPy = Get-Command python -ErrorAction SilentlyContinue
+    if ($sysPy) { $candidates += $sysPy.Source }
+
+    foreach ($c in ($candidates | Where-Object { $_ } | Select-Object -Unique)) {
+        if (Test-Path $c) {
+            & $c -c "import graphify.serve" 2>$null
+            if ($LASTEXITCODE -eq 0) { return $c }
+        }
+    }
+    return $null
+}
+
 Write-Host "== Claude Code bootstrap ==" -ForegroundColor Cyan
 
 # 0. Ponytail plugin (anti-overengineering guardrails) - check before installing
@@ -94,7 +124,76 @@ if ($rtk) {
     Write-Host "[skip] rtk not found. Install from https://github.com/rtk-ai/rtk, then re-run this script to wire the hook." -ForegroundColor Yellow
 }
 
-# 2. Agents - copy only if missing or identical; warn (never clobber) if different
+# 2. Graphify - codebase knowledge graph skill. Same policy as rtk: check, never
+# install the Python package silently. Registration (graphify install) writes to
+# ~/.claude/skills/ and is config, not a binary, so that part we do run.
+$graphify = Get-Command graphify -ErrorAction SilentlyContinue
+if ($graphify) {
+    Write-Host "[ok] graphify found: $($graphify.Source)"
+
+    $skillPath = Join-Path $ClaudeDir "skills\graphify\SKILL.md"
+    if (Test-Path $skillPath) {
+        Write-Host "[ok] graphify skill already registered at $skillPath"
+    } else {
+        graphify install 2>&1 | Out-Null
+        if (Test-Path $skillPath) {
+            Write-Host "[add] graphify skill registered at $skillPath"
+        } else {
+            Write-Host "[warn] 'graphify install' ran but $skillPath is missing - register manually." -ForegroundColor Yellow
+        }
+    }
+
+    # Pointer in the global CLAUDE.md so /graphify resolves to the skill.
+    $claudeMd = Join-Path $ClaudeDir "CLAUDE.md"
+    $pointer = @"
+- **graphify** (``~/.claude/skills/graphify/SKILL.md``) - any input to knowledge graph
+When the user types ``/graphify``, invoke the Skill tool with ``skill: "graphify"``
+"@
+    $existingMd = if (Test-Path $claudeMd) { Get-Content $claudeMd -Raw } else { "" }
+    if ($existingMd -match 'skills/graphify/SKILL\.md') {
+        Write-Host "[ok] CLAUDE.md already points at the graphify skill"
+    } else {
+        $sep = if ($existingMd -and -not $existingMd.EndsWith("`n")) { "`n`n" } elseif ($existingMd) { "`n" } else { "" }
+        ($existingMd + $sep + $pointer) | Set-Content $claudeMd -Encoding utf8
+        Write-Host "[add] CLAUDE.md: graphify skill pointer appended"
+    }
+    # MCP server, so the graph is queried automatically instead of only on /graphify.
+    # There is NO 'graphify --mcp' command - the CLI has no mcp subcommand at all
+    # (--mcp in the docs is a flag the skill passes, not a CLI verb). The stdio
+    # server is graphify/serve.py, run as: <python> -m graphify.serve [graph.json].
+    # It needs the interpreter that can actually import graphify, which for a
+    # 'uv tool install' is the isolated tool venv, not whatever 'python' is on PATH.
+    $py = Get-GraphifyPython
+    if (-not $py) {
+        Write-Host "[warn] found the graphify CLI but no interpreter that can 'import graphify.serve' - skipping MCP registration." -ForegroundColor Yellow
+    } else {
+        & $py -c "import mcp" 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "[warn] 'mcp' is an optional extra and is not installed - the server would fail on start." -ForegroundColor Yellow
+            Write-Host "       Fix: uv tool install `"graphifyy[mcp]`" --force   (then re-run this script)"
+        } elseif (-not $claudeCmd) {
+            Write-Host "[skip] claude CLI not on PATH, cannot register the MCP server. Manually:" -ForegroundColor Yellow
+            Write-Host "       claude mcp add --scope user graphify -- `"$py`" -m graphify.serve"
+        } else {
+            $mcpList = claude mcp list 2>&1 | Out-String
+            if ($mcpList -match '(?m)^\s*graphify\b') {
+                Write-Host "[ok] graphify MCP server already registered"
+            } else {
+                claude mcp add --scope user graphify -- "$py" -m graphify.serve 2>&1 | Out-Null
+                Write-Host "[add] graphify MCP server registered (user scope): $py -m graphify.serve"
+                Write-Host "       Note: it loads graphify-out/graph.json relative to the session's"
+                Write-Host "       working dir and exits if that file is missing, so it will show as"
+                Write-Host "       failed in every repo where you have not run /graphify . at least once."
+            }
+        }
+    }
+} else {
+    Write-Host "[skip] graphify not found. Install with 'uv tool install `"graphifyy[mcp]`"' (or 'pipx install `"graphifyy[mcp]`"'), open a new terminal, then re-run this script." -ForegroundColor Yellow
+    Write-Host "       Package is 'graphifyy' (double y) - the CLI it puts on PATH is 'graphify'."
+    Write-Host "       The [mcp] extra is required for the MCP server; the bare package does not pull it in."
+}
+
+# 3. Agents - copy only if missing or identical; warn (never clobber) if different
 $agentsSrc = Join-Path $here "agents"
 $agentsDst = Join-Path $ClaudeDir "agents"
 New-Item -ItemType Directory -Force -Path $agentsDst | Out-Null
@@ -113,7 +212,7 @@ Get-ChildItem $agentsSrc -Filter *.md | ForEach-Object {
     }
 }
 
-# 2b. Statusline script - shows caveman/ponytail level and live context usage.
+# 3b. Statusline script - shows caveman/ponytail level and live context usage.
 # Runs outside the model, so it costs zero tokens; it's the only way to see
 # context filling up without spending context to ask.
 $hooksDst = Join-Path $ClaudeDir "hooks"
@@ -130,7 +229,7 @@ if (-not (Test-Path $statuslineDst)) {
     Write-Host "[add] hooks/statusline.ps1 updated to template version"
 }
 
-# 3. settings.json - merge, don't overwrite unrelated keys
+# 4. settings.json - merge, don't overwrite unrelated keys
 $settingsPath = Join-Path $ClaudeDir "settings.json"
 $patch = Get-Content (Join-Path $here "settings.patch.json") -Raw | ConvertFrom-Json
 
