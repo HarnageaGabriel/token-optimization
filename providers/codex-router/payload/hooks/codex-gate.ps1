@@ -1,13 +1,6 @@
 $ErrorActionPreference = 'Stop'
 $THRESHOLD = 3
 $EDIT_TOOLS = @('Edit', 'Write', 'MultiEdit', 'NotebookEdit')
-$ALLOWED_SUBAGENTS = @(
-    'linkedin-writer',
-    'linkedin-hook-specialist',
-    'linkedin-blog-writer',
-    'claude-code-guide',
-    'statusline-setup'
-)
 
 function Get-UserHome {
     if ($HOME) { return $HOME }

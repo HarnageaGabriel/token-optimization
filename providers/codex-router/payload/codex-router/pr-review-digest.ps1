@@ -10,7 +10,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-function Add-SourceLines {
+function Add-SourceLine {
     param(
         [System.Collections.Generic.List[string]]$Target,
         [object[]]$Source,
@@ -26,7 +26,7 @@ function Add-SourceLines {
     }
 }
 
-function Get-RiskyRules {
+function Get-RiskyRule {
     return [ordered]@{
         auth = '(?i)auth'
         secret = '(?i)secret'
@@ -58,7 +58,7 @@ function Test-IsTestPath {
         $Path -match '(?i)(^|[-_.])(test|spec)([-_.]|$)[^/]*\.[^/]+$'
 }
 
-function Get-DiffHunks {
+function Get-DiffHunk {
     param(
         [string]$Repository,
         [string]$RevisionRange,
@@ -127,7 +127,7 @@ try {
         }
     }
 
-    $riskRules = Get-RiskyRules
+    $riskRules = Get-RiskyRule
     $riskyFiles = [System.Collections.Generic.List[object]]::new()
     foreach ($path in $changedFiles) {
         $riskMatches = @($riskRules.Keys | Where-Object { $path -match $riskRules[$_] })
@@ -162,7 +162,7 @@ try {
             [void]$testLines.Add('TEST=PASS')
         } else {
             [void]$testLines.Add('TEST=FAIL')
-            Add-SourceLines -Target $testLines -Source $testOutput -Maximum 15
+            Add-SourceLine -Target $testLines -Source $testOutput -Maximum 15
         }
     }
 
@@ -181,11 +181,11 @@ try {
     [void]$lines.Add("REPO=$repoPath")
     [void]$lines.Add("BASE=$Base")
     [void]$lines.Add('DIFF STAT')
-    Add-SourceLines -Target $lines -Source $stat -Maximum 10
+    Add-SourceLine -Target $lines -Source $stat -Maximum 10
     [void]$lines.Add("FILES CHANGED=$($changedFiles.Count)")
-    Add-SourceLines -Target $lines -Source $changedFiles -Maximum 20
+    Add-SourceLine -Target $lines -Source $changedFiles -Maximum 20
     [void]$lines.Add("RISKY FILES=$($riskyFiles.Count)")
-    Add-SourceLines -Target $lines -Source @($riskyFiles | ForEach-Object { '{0} [{1}]' -f $_.Path, $_.Matches }) -Maximum 8
+    Add-SourceLine -Target $lines -Source @($riskyFiles | ForEach-Object { '{0} [{1}]' -f $_.Path, $_.Matches }) -Maximum 8
 
     $hunkBudget = 119 - $lines.Count - $tail.Count - 2
     if ($hunkBudget -lt 0) { $hunkBudget = 0 }
@@ -199,7 +199,7 @@ try {
             break
         }
 
-        $hunks = @(Get-DiffHunks -Repository $repoPath -RevisionRange $revisionRange -Path $displayedRisks[$riskIndex].Path)
+        $hunks = @(Get-DiffHunk -Repository $repoPath -RevisionRange $revisionRange -Path $displayedRisks[$riskIndex].Path)
         $remainingRisks = $displayedRisks.Count - $riskIndex
         $fileBudget = [Math]::Min(60, [Math]::Max(1, [Math]::Floor($hunkBudget / $remainingRisks)))
         $fileCount = 0

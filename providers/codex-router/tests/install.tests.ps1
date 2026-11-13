@@ -11,7 +11,7 @@ $hostPath = (Get-Process -Id $PID).Path
 function Assert-True([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
 }
-function Run-Case([string]$Name, [scriptblock]$Body) {
+function Invoke-Case([string]$Name, [scriptblock]$Body) {
     try { & $Body; Write-Output "PASS  $Name"; $script:passed++ }
     catch { Write-Output "FAIL  $Name - $($_.Exception.Message)"; $script:failed++ }
 }
@@ -46,7 +46,7 @@ try {
     [IO.File]::WriteAllText((Join-Path $claudeHome 'settings.json'), "{`n  `"unrelated`": `"keep-me`",`n  `"hooks`": {`n    `"PreToolUse`": [{`"matcher`":`"Bash`",`"hooks`":[{`"type`":`"command`",`"command`":`"existing hook`"}]}]`n  }`n}`n", (New-Object Text.UTF8Encoding($false)))
     [IO.File]::WriteAllText((Join-Path $claudeHome 'CLAUDE.md'), "user instructions`n", (New-Object Text.UTF8Encoding($false)))
 
-    Run-Case 'dry run writes nothing' {
+    Invoke-Case 'dry run writes nothing' {
         $dryClaude = Join-Path $tempRoot 'dry-claude'
         $dryCodex = Join-Path $tempRoot 'dry-codex'
         $output = @(& $script:hostPath -NoProfile -File $installer -ClaudeHome $dryClaude -CodexHome $dryCodex -DryRun 2>&1 | ForEach-Object { [string]$_ }) -join "`n"
@@ -55,7 +55,7 @@ try {
         Assert-True ($output -match 'plan complete; no files written') 'dry-run plan summary missing'
     }
 
-    Run-Case 'relative CLAUDE_CONFIG_DIR resolves to an absolute path' {
+    Invoke-Case 'relative CLAUDE_CONFIG_DIR resolves to an absolute path' {
         $savedConfigDir = $env:CLAUDE_CONFIG_DIR
         try {
             $env:CLAUDE_CONFIG_DIR = '.claude-relative'
@@ -71,7 +71,7 @@ try {
         }
     }
 
-    Run-Case 'fresh install and verification' {
+    Invoke-Case 'fresh install and verification' {
         $output = Invoke-Installer
         Assert-True ($output -match '\[verify\] PASS') 'installer verification did not pass'
         foreach ($relative in @('codex-router\codex-task.ps1','codex-router\test-router.ps1','hooks\codex-first.ps1','codex-router\.installed.json')) {
@@ -87,7 +87,7 @@ try {
         Assert-True ($claudeText -match '<!-- codex-router:begin -->') 'routing block missing'
     }
 
-    Run-Case 'custom ClaudeHome is honoured end to end' {
+    Invoke-Case 'custom ClaudeHome is honoured end to end' {
         $output = Invoke-Installer
         $settings = Get-Content -Raw -LiteralPath (Join-Path $claudeHome 'settings.json') | ConvertFrom-Json
         $commands = @($settings.hooks.PSObject.Properties.Value | ForEach-Object { $_ } | ForEach-Object { $_.hooks } | ForEach-Object { $_.command })
@@ -99,7 +99,7 @@ try {
         Assert-True ($output -match '\[verify\] PASS') 'router self-test did not pass from custom ClaudeHome'
     }
 
-    Run-Case 'model mapping file is read and edited value takes effect in dry run' {
+    Invoke-Case 'model mapping file is read and edited value takes effect in dry run' {
         $catalogPath = Join-Path $claudeHome 'codex-router\\model-catalog.json'
         Assert-True (Test-Path -LiteralPath $catalogPath -PathType Leaf) 'model-catalog.json was not installed'
         $originalCatalog = Get-Content -Raw -LiteralPath $catalogPath
@@ -115,14 +115,14 @@ try {
         }
     }
 
-    Run-Case 'idempotent re-run changes no files' {
+    Invoke-Case 'idempotent re-run changes no files' {
         $before = Get-TreeFingerprint $claudeHome
         [void](Invoke-Installer)
         $after = Get-TreeFingerprint $claudeHome
         Assert-True ($before -eq $after) 'second install changed the installed tree'
     }
 
-    Run-Case 'modified owned file produces new payload' {
+    Invoke-Case 'modified owned file produces new payload' {
         $target = Join-Path $claudeHome 'codex-router\codex-task.ps1'
         Add-Content -LiteralPath $target -Value '# user modification' -Encoding ascii
         $modifiedHash = Get-Sha256 $target
@@ -134,7 +134,7 @@ try {
         Assert-True ((Get-Sha256 "$target.new") -eq (Get-Sha256 $payload)) '.new does not match payload'
     }
 
-    Run-Case 'uninstall restores user configuration' {
+    Invoke-Case 'uninstall restores user configuration' {
         [void](Invoke-Installer @('-Uninstall', '-Force'))
         Assert-True (-not (Test-Path -LiteralPath (Join-Path $claudeHome 'codex-router\codex-task.ps1'))) 'owned router file remains'
         Assert-True (-not (Test-Path -LiteralPath (Join-Path $claudeHome 'codex-router\codex-task.ps1.new'))) 'owned .new file remains'

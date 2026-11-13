@@ -48,7 +48,9 @@ function Write-Blocked {
 }
 
 function Set-CodexUnavailableMarker {
+    [CmdletBinding(SupportsShouldProcess)]
     param([string]$Reason)
+    if (-not $PSCmdlet.ShouldProcess($script:unavailableMarker, 'Write the codex-unavailable marker')) { return }
     [void](New-Item -ItemType Directory -Path $script:stateDir -Force)
     Set-Content -LiteralPath $script:unavailableMarker -Value @([DateTimeOffset]::UtcNow.ToString('o'), $Reason) -Encoding utf8
 }
@@ -153,7 +155,7 @@ $prompt = "MODE: $Mode`nTASK_TYPE: $Type`n`n$policy`n`n$taskText`n`n$compact$ful
 
 $lastMessage = Join-Path ([IO.Path]::GetTempPath()) ('codex-task-' + [guid]::NewGuid().ToString('N') + '.txt')
 $arguments = @('exec', '-m', $Model, '--color', 'never', '--sandbox', $sandbox, '-c', "model_reasoning_effort=`"$Effort`"", '--cd', $repoPath, '--skip-git-repo-check', '--output-last-message', $lastMessage, '-')
-Write-Output "MODEL: $Model provider=codex tier=$tierLabel effort=$Effort mode=$Mode sandbox=$sandbox"
+Write-Output "MODEL: $Model provider=$Provider tier=$tierLabel effort=$Effort mode=$Mode sandbox=$sandbox"
 if ($DryRun) {
     Write-Output "COMMAND: $codexExecutable $($arguments -join ' ')"
     Write-Output 'STATUS: success'

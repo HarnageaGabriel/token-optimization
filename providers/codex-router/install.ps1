@@ -10,6 +10,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+[void]$Force
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $payloadRoot = Join-Path $scriptRoot 'payload'
 $planOnly = [bool]($DryRun -or $WhatIfPreference)
@@ -34,8 +35,6 @@ $hooksHome = Join-Path $ClaudeHome 'hooks'
 $statePath = Join-Path $routerHome '.installed.json'
 $settingsPath = Join-Path $ClaudeHome 'settings.json'
 $claudeMdPath = Join-Path $ClaudeHome 'CLAUDE.md'
-$beginMarker = '<!-- codex-router:begin -->'
-$endMarker = '<!-- codex-router:end -->'
 
 function Test-HasProp($Object, [string]$Name) {
     return $null -ne $Object -and ($Object.PSObject.Properties.Name -contains $Name)
@@ -81,7 +80,10 @@ function Get-StateFile($State, [string]$RelativePath) {
     return @($State.files | Where-Object { $_.path -eq $RelativePath } | Select-Object -First 1)[0]
 }
 
-function Set-StateFile($State, [string]$RelativePath, [string]$Hash) {
+function Set-StateFile {
+    [CmdletBinding(SupportsShouldProcess)]
+    param($State, [string]$RelativePath, [string]$Hash)
+    if (-not $PSCmdlet.ShouldProcess($RelativePath, 'Record installed file hash')) { return }
     $existing = Get-StateFile $State $RelativePath
     if ($existing) { $existing.hash = $Hash }
     else { $State.files = @($State.files) + [pscustomobject]@{ path = $RelativePath; hash = $Hash } }
@@ -247,26 +249,26 @@ function Install-Payload($State) {
     }
 }
 
-function Add-Hook($Settings, $State, [string]$Event, [string]$Matcher, [string]$Command) {
+function Add-Hook($Settings, $State, [string]$hookEvent, [string]$Matcher, [string]$Command) {
     if (-not (Test-HasProp $Settings 'hooks')) { $Settings | Add-Member hooks ([pscustomobject]@{}) }
-    if (-not (Test-HasProp $Settings.hooks $Event)) { $Settings.hooks | Add-Member $Event @() }
-    $entries = @($Settings.hooks.$Event)
+    if (-not (Test-HasProp $Settings.hooks $hookEvent)) { $Settings.hooks | Add-Member $hookEvent @() }
+    $entries = @($Settings.hooks.$hookEvent)
     $entry = @($entries | Where-Object { [string]$_.matcher -eq $Matcher } | Select-Object -First 1)[0]
     if (-not $entry) {
         $entry = [pscustomobject]@{ matcher = $Matcher; hooks = @() }
-        $Settings.hooks.$Event = $entries + $entry
+        $Settings.hooks.$hookEvent = $entries + $entry
     }
     if (@($entry.hooks | Where-Object { $_.type -eq 'command' -and $_.command -eq $Command }).Count) {
-        Write-Host "[ok] settings.json: $Event $Matcher -> $Command"
+        Write-Host "[ok] settings.json: $hookEvent $Matcher -> $Command"
         return $false
     }
     $entry.hooks = @($entry.hooks) + [pscustomobject]@{ type = 'command'; command = $Command }
-    $State.settingsHooks = @($State.settingsHooks) + [pscustomobject]@{ event = $Event; matcher = $Matcher; command = $Command }
-    Write-Host "[add] settings.json: $Event $Matcher -> $Command"
+    $State.settingsHooks = @($State.settingsHooks) + [pscustomobject]@{ event = $hookEvent; matcher = $Matcher; command = $Command }
+    Write-Host "[add] settings.json: $hookEvent $Matcher -> $Command"
     return $true
 }
 
-function Install-Settings($State) {
+function Install-Setting($State) {
     if (Test-Path -LiteralPath $settingsPath -PathType Leaf) {
         try { $settings = Get-Content -Raw -LiteralPath $settingsPath | ConvertFrom-Json }
         catch { throw "Cannot merge invalid JSON in '$settingsPath': $($_.Exception.Message)" }
@@ -315,7 +317,10 @@ function Install-ClaudeBlock($State) {
     $State.claudeBlockHash = $blockHash
 }
 
-function Remove-Hooks($Settings, $State) {
+function Remove-Hook {
+    [CmdletBinding(SupportsShouldProcess)]
+    param($Settings, $State)
+    if (-not $PSCmdlet.ShouldProcess('settings.json', 'Remove router hooks')) { return $false }
     $changed = $false
     foreach ($record in @($State.settingsHooks)) {
         if (-not (Test-HasProp $Settings 'hooks') -or -not (Test-HasProp $Settings.hooks $record.event)) { continue }
@@ -358,7 +363,7 @@ function Invoke-Uninstall {
 
     if (Test-Path -LiteralPath $settingsPath -PathType Leaf) {
         $settings = Get-Content -Raw -LiteralPath $settingsPath | ConvertFrom-Json
-        if ((Remove-Hooks $settings $state) -and -not $planOnly) {
+        if ((Remove-Hook $settings $state) -and -not $planOnly) {
             if ($settings.PSObject.Properties.Count -eq 0) { Remove-Item -LiteralPath $settingsPath -Force }
             else { Write-Utf8 $settingsPath (($settings | ConvertTo-Json -Depth 20) + "`n") }
         }
@@ -416,7 +421,7 @@ if ($Doctor -and -not $FixRtk) { Invoke-Doctor; exit 0 }
 Write-Host "== Codex router install$(if ($planOnly) { ' plan' }) ==" -ForegroundColor Cyan
 $state = Read-State
 Install-Payload $state
-Install-Settings $state
+Install-Setting $state
 Install-ClaudeBlock $state
 if (-not $planOnly) {
     [void](New-Item -ItemType Directory -Force -Path $routerHome)
